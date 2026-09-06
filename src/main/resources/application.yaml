@@ -1,0 +1,46 @@
+spring:
+  application:
+    name: moneymanager
+
+  profiles:
+    active: prod
+
+  # JPA Configuration
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+  # Mail Configuration
+  mail:
+    host: smtp-relay.brevo.com
+    port: 587
+    username: ${BRAVO_USERNAME}
+    password: ${BRAVO_PASSWORD}
+    protocol: smtp
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+          from: ${FROM_EMAIL}
+
+server:
+  port: 8083
+  servlet:
+    context-path: /api/v1.0
+
+jwt:
+  secret: ${JWT_SECRET}
+
+money-manager:
+  frontend:
+    url: ${FRONTEND_URL}
+
+app:
+  activation:
+    url: ${MONEY_MANAGER_BACKEND_URL}
