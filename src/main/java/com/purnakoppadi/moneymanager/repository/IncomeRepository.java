@@ -27,6 +27,8 @@ public interface IncomeRepository extends JpaRepository<IncomeEntity, Long> {
             Sort sort
     );
 
+    List<IncomeEntity> findByProfileId(Long profileId);
+
     List<IncomeEntity> findByProfileIdAndDateBetween(
             Long profileId,
             LocalDate startDate,

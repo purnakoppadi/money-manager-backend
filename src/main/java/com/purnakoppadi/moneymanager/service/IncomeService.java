@@ -16,6 +16,13 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+
+import java.io.ByteArrayOutputStream;
+
 @Service
 @RequiredArgsConstructor
 public class IncomeService {
@@ -23,6 +30,7 @@ public class IncomeService {
     private final CategoryRepository categoryRepository;
     private final IncomeRepository incomeRepository;
     private final ProfileService profileService;
+    private final EmailService emailService;
 
 
     // Add Income
@@ -131,6 +139,138 @@ public class IncomeService {
 
         List<IncomeEntity> list=incomeRepository.findByProfileIdAndDateBetweenAndNameContainingIgnoreCase(profile.getId(),startDate,endDate,keyword,sort);
         return list.stream().map(this::toDTO).toList();
+    }
+
+    public byte[] downloadIncomeExcel() {
+
+        ProfileEntity profile = profileService.getCurrentProfile();
+
+        List<IncomeEntity> incomes =
+                incomeRepository.findByProfileId(profile.getId());
+
+        try (Workbook workbook = new XSSFWorkbook();
+             ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+
+            Sheet sheet = workbook.createSheet("Income Details");
+
+            Row header = sheet.createRow(0);
+
+            header.createCell(0).setCellValue("ID");
+            header.createCell(1).setCellValue("Name");
+            header.createCell(2).setCellValue("Amount");
+            header.createCell(3).setCellValue("Category");
+            header.createCell(4).setCellValue("Date");
+
+            int rowNum = 1;
+
+            for (IncomeEntity income : incomes) {
+
+                Row row = sheet.createRow(rowNum++);
+
+                row.createCell(0).setCellValue(income.getId());
+                row.createCell(1).setCellValue(income.getName());
+                row.createCell(2).setCellValue(
+                        income.getAmount().doubleValue()
+                );
+                row.createCell(3).setCellValue(
+                        income.getCategory() != null
+                                ? income.getCategory().getName()
+                                : "N/A"
+                );
+                row.createCell(4).setCellValue(
+                        income.getDate() != null
+                                ? income.getDate().toString()
+                                : ""
+                );
+            }
+
+            for (int i = 0; i < 5; i++) {
+                sheet.autoSizeColumn(i);
+            }
+
+            workbook.write(outputStream);
+
+            return outputStream.toByteArray();
+
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to generate income Excel", e);
+        }
+    }
+
+    public void emailIncomeDetails() {
+
+        ProfileEntity profile = profileService.getCurrentProfile();
+
+        List<IncomeEntity> incomes =
+                incomeRepository.findByProfileId(profile.getId());
+
+        StringBuilder table = new StringBuilder();
+
+        table.append("<table style='border-collapse:collapse;width:100%;'>");
+
+        table.append(
+                "<tr style='background-color:#f2f2f2;'>" +
+                        "<th style='border:1px solid #ddd;padding:8px;'>S.No</th>" +
+                        "<th style='border:1px solid #ddd;padding:8px;'>Name</th>" +
+                        "<th style='border:1px solid #ddd;padding:8px;'>Amount</th>" +
+                        "<th style='border:1px solid #ddd;padding:8px;'>Category</th>" +
+                        "<th style='border:1px solid #ddd;padding:8px;'>Date</th>" +
+                        "</tr>"
+        );
+
+        int i = 1;
+
+        for (IncomeEntity income : incomes) {
+
+            table.append("<tr>");
+
+            table.append("<td style='border:1px solid #ddd;padding:8px;'>")
+                    .append(i++)
+                    .append("</td>");
+
+            table.append("<td style='border:1px solid #ddd;padding:8px;'>")
+                    .append(income.getName())
+                    .append("</td>");
+
+            table.append("<td style='border:1px solid #ddd;padding:8px;'>")
+                    .append(income.getAmount())
+                    .append("</td>");
+
+            table.append("<td style='border:1px solid #ddd;padding:8px;'>")
+                    .append(
+                            income.getCategory() != null
+                                    ? income.getCategory().getName()
+                                    : "N/A"
+                    )
+                    .append("</td>");
+
+            table.append("<td style='border:1px solid #ddd;padding:8px;'>")
+                    .append(
+                            income.getDate() != null
+                                    ? income.getDate()
+                                    : ""
+                    )
+                    .append("</td>");
+
+            table.append("</tr>");
+        }
+
+        table.append("</table>");
+
+        String body =
+                "Hi " + profile.getFullName() +
+                        ",<br><br>" +
+                        "Here are your income details:<br><br>" +
+                        table +
+                        "<br><br>" +
+                        "Best regards,<br>" +
+                        "Money Manager Team";
+
+        emailService.sendEmail(
+                profile.getEmail(),
+                "Your Income Details",
+                body
+        );
     }
 
 

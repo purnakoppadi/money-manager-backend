@@ -8,9 +8,20 @@ import com.purnakoppadi.moneymanager.entity.ProfileEntity;
 import com.purnakoppadi.moneymanager.repository.CategoryRepository;
 import com.purnakoppadi.moneymanager.repository.ExpenseRepository;
 import lombok.RequiredArgsConstructor;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.cglib.core.Local;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+
+
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+
+import java.io.ByteArrayOutputStream;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -24,6 +35,7 @@ public class ExpenseService {
     private final CategoryRepository categoryRepository;
     private final ExpenseRepository expenseRepository;
     private final ProfileService profileService;
+    private final EmailService emailService;
 
     public ExpenseDTO addExpense(ExpenseDTO expenseDTO)
     {
@@ -85,6 +97,160 @@ public class ExpenseService {
         List<ExpenseEntity> list=expenseRepository.findByProfileIdAndDateBetweenAndNameContainingIgnoreCase(profile.getId(),startDate,endDate,keyword,sort);
         return list.stream().map(this::toDTO).toList();
    }
+
+    public byte[] downloadExpenseExcel() {
+
+        ProfileEntity profile = profileService.getCurrentProfile();
+
+        List<ExpenseEntity> expenses =
+                expenseRepository.findByProfileId(profile.getId());
+
+        try (Workbook workbook = new XSSFWorkbook();
+             ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+
+            Sheet sheet = workbook.createSheet("Expense Details");
+
+            Row header = sheet.createRow(0);
+
+            header.createCell(0).setCellValue("ID");
+            header.createCell(1).setCellValue("Name");
+            header.createCell(2).setCellValue("Amount");
+            header.createCell(3).setCellValue("Category");
+            header.createCell(4).setCellValue("Date");
+
+            int rowNum = 1;
+
+            for (ExpenseEntity expense : expenses) {
+
+                Row row = sheet.createRow(rowNum++);
+
+                row.createCell(0).setCellValue(expense.getId());
+
+                row.createCell(1).setCellValue(
+                        expense.getName()
+                );
+
+                row.createCell(2).setCellValue(
+                        expense.getAmount().doubleValue()
+                );
+
+                row.createCell(3).setCellValue(
+                        expense.getCategory() != null
+                                ? expense.getCategory().getName()
+                                : "N/A"
+                );
+
+                row.createCell(4).setCellValue(
+                        expense.getDate() != null
+                                ? expense.getDate().toString()
+                                : ""
+                );
+            }
+
+            for (int i = 0; i < 5; i++) {
+                sheet.autoSizeColumn(i);
+            }
+
+            workbook.write(outputStream);
+
+            return outputStream.toByteArray();
+
+        } catch (Exception e) {
+            throw new RuntimeException(
+                    "Failed to generate expense Excel",
+                    e
+            );
+        }
+    }
+
+
+    public void emailExpenseDetails() {
+
+        ProfileEntity profile = profileService.getCurrentProfile();
+
+        List<ExpenseEntity> expenses =
+                expenseRepository.findByProfileId(profile.getId());
+
+        StringBuilder table = new StringBuilder();
+
+        table.append(
+                "<table style='border-collapse:collapse;width:100%;'>"
+        );
+
+        table.append(
+                "<tr style='background-color:#f2f2f2;'>" +
+                        "<th style='border:1px solid #ddd;padding:8px;'>S.No</th>" +
+                        "<th style='border:1px solid #ddd;padding:8px;'>Name</th>" +
+                        "<th style='border:1px solid #ddd;padding:8px;'>Amount</th>" +
+                        "<th style='border:1px solid #ddd;padding:8px;'>Category</th>" +
+                        "<th style='border:1px solid #ddd;padding:8px;'>Date</th>" +
+                        "</tr>"
+        );
+
+        int i = 1;
+
+        for (ExpenseEntity expense : expenses) {
+
+            table.append("<tr>");
+
+            table.append(
+                            "<td style='border:1px solid #ddd;padding:8px;'>"
+                    )
+                    .append(i++)
+                    .append("</td>");
+
+            table.append(
+                            "<td style='border:1px solid #ddd;padding:8px;'>"
+                    )
+                    .append(expense.getName())
+                    .append("</td>");
+
+            table.append(
+                            "<td style='border:1px solid #ddd;padding:8px;'>"
+                    )
+                    .append(expense.getAmount())
+                    .append("</td>");
+
+            table.append(
+                            "<td style='border:1px solid #ddd;padding:8px;'>"
+                    )
+                    .append(
+                            expense.getCategory() != null
+                                    ? expense.getCategory().getName()
+                                    : "N/A"
+                    )
+                    .append("</td>");
+
+            table.append(
+                            "<td style='border:1px solid #ddd;padding:8px;'>"
+                    )
+                    .append(
+                            expense.getDate() != null
+                                    ? expense.getDate()
+                                    : ""
+                    )
+                    .append("</td>");
+
+            table.append("</tr>");
+        }
+
+        table.append("</table>");
+
+        String body =
+                "Hi " + profile.getFullName() +
+                        ",<br><br>" +
+                        "Here are your expense details:<br><br>" +
+                        table +
+                        "<br><br>" +
+                        "Best regards,<br>" +
+                        "Money Manager Team";
+
+        emailService.sendEmail(
+                profile.getEmail(),
+                "Your Expense Details",
+                body
+        );
+    }
 
 
 

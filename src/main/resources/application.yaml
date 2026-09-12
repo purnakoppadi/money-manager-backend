@@ -2,8 +2,13 @@ spring:
   application:
     name: moneymanager
 
+
+
   profiles:
     active: prod
+
+
+
 
   # JPA Configuration
   jpa:
